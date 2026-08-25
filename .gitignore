@@ -1,16 +1,31 @@
-# dependencias y artefactos de build
+# Go
+*.exe
+*.test
+*.out
+vendor/
+
+# Node
 node_modules/
-bin/
-obj/
 dist/
 build/
+coverage/
+*.log
 
-# secretos: NUNCA se versionan
+# Environment and secrets
 .env
-*.local
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+secrets/
+credentials/
 
-# basura del sistema operativo y del editor
+# Editors and operating systems
 .DS_Store
 Thumbs.db
+*.tmp
+*.swp
 .vscode/
 .idea/

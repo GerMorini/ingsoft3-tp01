@@ -21,8 +21,6 @@ import (
 	"github.com/gmorini/inge-soft-3/backend/migrations"
 )
 
-var _ = simboloInexistente
-
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	ctx, stop := signal.NotifyContext(

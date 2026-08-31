@@ -263,8 +263,12 @@ individual y GitHub no permite aprobar un Pull Request propio.
 ### Problemas encontrados y soluciones
 
 Para comprobar el gate se introdujo de forma temporal una referencia a un símbolo inexistente en el
-backend. El objetivo es observar el build fallido y el bloqueo del merge antes de retirar el error
-en un segundo commit del mismo Pull Request.
+backend. El job `build-backend` falló durante la instrucción `go build` del Dockerfile con el error
+`undefined: simboloInexistente`, mientras que `build-frontend` terminó correctamente. GitHub marcó
+el Pull Request como bloqueado porque uno de sus checks obligatorios estaba en rojo.
+
+La referencia inválida se eliminó en un segundo commit del mismo Pull Request. De esta manera, el
+historial conserva tanto la corrida fallida como la corrección que vuelve a habilitar el merge.
 
 ### Uso de inteligencia artificial
 

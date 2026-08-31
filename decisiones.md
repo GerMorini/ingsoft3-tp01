@@ -222,3 +222,56 @@ La asistencia se utilizó principalmente para:
 Las configuraciones del Project y la mayor parte de las operaciones se realizaron manualmente desde la interfaz web de GitHub para comprender el funcionamiento de la herramienta.
 
 Los comandos proporcionados por la IA fueron ejecutados y verificados observando posteriormente su resultado tanto en GitHub como en la terminal. También se contrastaron las explicaciones con la consigna del TP antes de aplicarlas.
+
+## TP4 — Integración continua
+
+### Estructura del pipeline
+
+El workflow utiliza dos jobs independientes: `build-backend` y `build-frontend`. Cada job construye
+una de las imágenes definidas en el TP2 y se ejecuta en su propio runner. No se declaró una
+dependencia entre ellos porque ninguno necesita archivos ni resultados producidos por el otro. Esto
+permite que GitHub Actions los ejecute en paralelo.
+
+El pipeline construye las imágenes mediante `backend/Dockerfile` y `frontend/Dockerfile`. No repite
+la compilación con comandos propios de Go o Node. Así existe una sola definición del proceso de
+build y se evita verificar algo distinto de lo que posteriormente se ejecutará o desplegará.
+
+En este TP las imágenes no se publican ni se conservan. Su construcción sirve para producir los
+checks que verifican cada Pull Request. Los tests y sus reportes se incorporarán en el TP5.
+
+### Cache de capas
+
+Cada job usa el cache de GitHub Actions mediante Buildx. Los scopes `backend` y `frontend` están
+separados para impedir que una imagen sobrescriba el cache de la otra.
+
+En el backend se puede reutilizar la descarga de módulos mientras no cambien `go.mod` ni `go.sum`.
+Los cambios en el código invalidan las capas creadas desde `COPY . .` y obligan a recompilar el
+binario. En el frontend, `npm ci` se reutiliza mientras no cambien `package.json` ni
+`package-lock.json`; los cambios dentro de `src` invalidan el copiado y la compilación posterior.
+
+La segunda corrida del mismo Pull Request importó los dos caches independientes. El log mostró ocho
+capas `CACHED` en el frontend y seis en el backend. El cache es solamente una optimización: si
+desaparece, las imágenes deben poder construirse nuevamente desde cero.
+
+### Pipeline como gate
+
+La protección de `main` exige que `build-backend` y `build-frontend` terminen correctamente. También
+usa el modo estricto, por lo que un Pull Request debe verificarse contra la versión más reciente de
+`main` antes de poder fusionarse. Las aprobaciones permanecen en cero porque el proyecto es
+individual y GitHub no permite aprobar un Pull Request propio.
+
+### Problemas encontrados y soluciones
+
+Para comprobar el gate se introdujo de forma temporal una referencia a un símbolo inexistente en el
+backend. El objetivo es observar el build fallido y el bloqueo del merge antes de retirar el error
+en un segundo commit del mismo Pull Request.
+
+### Uso de inteligencia artificial
+
+Utilicé Codex para interpretar la consigna, adaptar el workflow a los Dockerfiles del proyecto,
+preparar comandos y asistir la redacción de esta sección. Las operaciones de Git y la configuración
+de protección de rama fueron realizadas manualmente.
+
+Verifiqué la asistencia revisando cada cambio, construyendo las imágenes con Docker y consultando
+los jobs y logs reales de GitHub Actions. También confirmé que los checks obligatorios y el cache
+se comportaran como exige la consigna.

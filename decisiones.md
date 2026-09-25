@@ -419,8 +419,15 @@ artefactos: [corrida 36154341919](https://github.com/GerMorini/ingsoft3-tp01/act
 La implementación se desarrolla en el
 [Pull Request 17](https://github.com/GerMorini/ingsoft3-tp01/pull/17).
 
-Las URLs de las corridas rojas por cobertura y del segundo Pull Request se agregarán junto a sus
-decisiones cuando existan. No se reemplazarán por capturas.
+Para comprobar el gate backend deshabilité temporalmente tres métodos de prueba, sin cambiar código
+productivo. Los tests restantes y la compilación terminaron correctamente, pero statements bajó a
+21,9 %, debajo del umbral de 25 %. Por eso `build-backend` quedó rojo mientras `build-frontend`
+permaneció verde: [corrida roja 36156384353](https://github.com/GerMorini/ingsoft3-tp01/actions/runs/36156384353).
+Después restauré los tres métodos en el siguiente commit. El historial del Pull Request conserva la
+demostración sin dejar pruebas deshabilitadas en el resultado final.
+
+La URL de la corrida roja frontend y la del segundo Pull Request se agregarán junto a sus decisiones
+cuando existan. No se reemplazarán por capturas.
 
 ### Alcance de los asserts asistidos
 

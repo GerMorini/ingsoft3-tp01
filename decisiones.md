@@ -414,8 +414,13 @@ una carpeta montada, agrega las métricas a `$GITHUB_STEP_SUMMARY` y publica res
 artefactos `coverage-backend` y `coverage-frontend`. Los pasos de publicación usan `!cancelled()`
 para conservar los reportes aunque falle un test o un umbral.
 
-Las URLs de la corrida verde, las corridas rojas por cobertura y los dos Pull Requests se agregarán
-junto a sus decisiones cuando existan. No se reemplazarán por capturas.
+La primera ejecución completa terminó con ambos checks verdes y publicó los dos resúmenes y
+artefactos: [corrida 36154341919](https://github.com/GerMorini/ingsoft3-tp01/actions/runs/36154341919).
+La implementación se desarrolla en el
+[Pull Request 17](https://github.com/GerMorini/ingsoft3-tp01/pull/17).
+
+Las URLs de las corridas rojas por cobertura y del segundo Pull Request se agregarán junto a sus
+decisiones cuando existan. No se reemplazarán por capturas.
 
 ### Alcance de los asserts asistidos
 

@@ -8,8 +8,12 @@ import (
 
 	"github.com/gmorini/inge-soft-3/backend/internal/identity/dao"
 	identityerrors "github.com/gmorini/inge-soft-3/backend/internal/identity/errors"
-	"github.com/gmorini/inge-soft-3/backend/internal/identity/repository"
 )
+
+type identityRepository interface {
+	CreateUser(context.Context, dao.CreateUserParams) (dao.CreatedUser, error)
+	FindCredentialsByUsername(context.Context, string) (dao.Credentials, error)
+}
 
 type RegisterInput struct {
 	FirstName    string
@@ -42,12 +46,12 @@ type LoginResult struct {
 }
 
 type Service struct {
-	repository *repository.Repository
+	repository identityRepository
 	tokens     *TokenManager
 	dummyHash  string
 }
 
-func New(repository *repository.Repository, tokens *TokenManager) (*Service, error) {
+func New(repository identityRepository, tokens *TokenManager) (*Service, error) {
 	dummyHash, err := hashPassword("dummy-password-never-used!123")
 	if err != nil {
 		return nil, fmt.Errorf("create dummy credential hash: %w", err)

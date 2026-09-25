@@ -32,11 +32,7 @@ func TestAuthenticate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sign expired token: %v", err)
 	}
-	alteredSuffix := "x"
-	if strings.HasSuffix(validToken, alteredSuffix) {
-		alteredSuffix = "y"
-	}
-	alteredToken := validToken[:len(validToken)-1] + alteredSuffix
+	alteredToken := alterTokenSignature(validToken)
 
 	tests := []struct {
 		name       string
@@ -82,6 +78,16 @@ func TestAuthenticate(t *testing.T) {
 			}
 		})
 	}
+}
+
+func alterTokenSignature(token string) string {
+	parts := strings.Split(token, ".")
+	replacement := "A"
+	if strings.HasPrefix(parts[2], replacement) {
+		replacement = "B"
+	}
+	parts[2] = replacement + parts[2][1:]
+	return strings.Join(parts, ".")
 }
 
 func TestCurrentUserRequiresIdentity(t *testing.T) {

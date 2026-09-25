@@ -279,3 +279,175 @@ de protección de rama fueron realizadas manualmente.
 Verifiqué la asistencia revisando cada cambio, construyendo las imágenes con Docker y consultando
 los jobs y logs reales de GitHub Actions. También confirmé que los checks obligatorios y el cache
 se comportaran como exige la consigna.
+
+## TP5 — Calidad automatizada
+
+### Lógica elegida
+
+Prioricé reglas cuyo fallo afecta seguridad, integridad de datos o uso normal de la aplicación:
+registro y contraseñas, emisión y validación de JWT, validación de ejercicios, sesiones y rutinas,
+estado de la sesión en el navegador, conversión segura de enlaces de YouTube y contrato del login
+con la API. Son reglas con entradas inválidas y bordes concretos; por eso un cambio incorrecto puede
+ser detectado por un assert y no solamente ejecutado para aumentar cobertura.
+
+En el backend cuento métodos `Test...`, no los subtests creados con `t.Run`. La selección evaluable
+contiene once métodos y supera el mínimo de ocho:
+
+| Método | Regla principal | Técnica destacada |
+|---|---|---|
+| `TestNormalizeAndValidateRegistration` | Normalización de identidad y domicilio | Parametrizado |
+| `TestNormalizeAndValidateRegistration_InvalidFields` | Formatos y campos obligatorios | Parametrizado y error |
+| `TestNormalizeAndValidateRegistration_PasswordThresholds` | Bordes de contraseña y domicilio | Bordes exactos |
+| `TestHashAndVerifyPassword` | Hash Argon2id y verificación | Seguridad |
+| `TestTokenManager_Issue` | Claims y duración del JWT | Tiempo controlado |
+| `TestTokenManager_Validate` | Expiración, firma y algoritmo del JWT | Parametrizado y error |
+| `TestService_RegisterCallsRepositoryWithNormalizedSecureData` | Coordinación del registro | Mock |
+| `TestService_RegisterDoesNotCallRepositoryForInvalidInput` | Rechazo antes de persistir | Error y mock |
+| `TestValidateExercise` | Nombre, opcionales y URL del ejercicio | Parametrizado y error |
+| `TestValidateSession` | Cantidades, orden y duplicados | Parametrizado y error |
+| `TestValidateRoutine` | Días válidos y sesiones duplicadas | Parametrizado y error |
+
+Esto cubre más de cuatro reglas independientes. En particular, una prueba de mutación manual cambió
+temporalmente el límite de día de `> 7` a `>= 7`. El caso `weekday boundaries` se puso rojo al
+rechazar el día 7. Luego restauré la condición y el test volvió a verde. La mutación no forma parte
+del código entregado; confirma que el assert protege el borde real.
+
+En el frontend hay siete métodos unitarios directos. Cada archivo declara
+`// @vitest-environment node`, por lo que estos tests no dependen del DOM:
+
+| Método | Comportamiento | Técnica destacada |
+|---|---|---|
+| `youtubeEmbedURL` convierte variantes oficiales | Produce URL `youtube-nocookie` | `it.each` |
+| `youtubeEmbedURL` rechaza entradas inseguras | Rechaza protocolo, host o ID inválido | `it.each` y error |
+| `isAccessTokenExpired` evalúa el vencimiento | Antes, durante y después del borde | `it.each` |
+| `isAccessTokenExpired` rechaza token malformado | La ausencia de payload vence la sesión | Error |
+| `isAccessTokenExpired` rechaza token sin `exp` | La ausencia de vencimiento invalida la sesión | Error |
+| `login` usa el cliente inyectado | Envía una sola solicitud con contrato exacto | Mock `vi.fn()` |
+| `login` transforma un rechazo HTTP | Expone `ApiError` con estado y cuerpo | Mock y error |
+
+### Estructura AAA
+
+`TestService_RegisterCallsRepositoryWithNormalizedSecureData` muestra Arrange, Act y Assert. En
+Arrange crea el doble del repositorio y el servicio; en Act ejecuta `Register`; en Assert comprueba
+resultado, cantidad de llamadas, normalización y que el repositorio reciba un hash Argon2id en vez
+de la contraseña. Los bloques están separados por líneas en blanco. Los tests parametrizados
+preparan la tabla antes del bucle, ejecutan una acción dentro de cada `t.Run` o `it.each` y verifican
+el resultado correspondiente.
+
+### Dobles e inyección de dependencias
+
+El servicio de identidad dependía del tipo concreto del repositorio. Lo cambié para recibir una
+interfaz privada con solamente `CreateUser` y `FindCredentialsByUsername`. El repositorio real la
+satisface sin adaptadores. El doble manual registra llamadas y permite configurar respuestas. Es
+un mock cuando el test verifica cantidad y parámetros; su respuesta configurada también cumple el
+papel de stub.
+
+En el frontend, `login` usaba directamente `fetch`. Ahora acepta un segundo parámetro opcional cuyo
+valor predeterminado sigue siendo `fetch`, por lo que los consumidores no cambian. El test inyecta
+un `vi.fn()`: funciona como stub al devolver una `Response` y como mock cuando se verifican ruta,
+método, cabeceras, cuerpo y cantidad de llamadas. Un fake, a diferencia de ambos, sería una
+implementación funcional simplificada, por ejemplo un repositorio completo en memoria.
+
+### Herramientas del stack
+
+| Necesidad | Backend Go | Frontend TypeScript |
+|---|---|---|
+| Parametrización | Tabla, `t.Run` | `it.each` de Vitest |
+| Doble | Estructura manual que implementa interfaz | `vi.fn()` |
+| Medición | `go test -coverprofile` y `go tool cover` | `@vitest/coverage-v8` 4.1.10 |
+| Umbral | Script shell y comparación con `awk` | `thresholds` de Vitest |
+| Selección medida | Lista explícita de paquetes | `include` y `exclude` de V8 |
+
+Vitest y `@vitest/coverage-v8` usan exactamente la versión 4.1.10. Los targets `test` de ambos
+Dockerfiles heredan la etapa de compilación. Así el pipeline construye la misma receta que produce
+la imagen final y luego ejecuta tests y cobertura con las herramientas ya incluidas en esa etapa.
+
+### Cobertura y umbrales
+
+La medición dentro del target Docker dio 31,2 % de statements en backend. El umbral es 25 % de statements.
+Para no elegir un valor arbitrario apliqué `5 × floor((cobertura - 3) / 5)`: queda cerca de la
+medición real, conserva 6,2 puntos de margen y frena una caída relevante. Go no ofrece branch
+coverage mediante `go test`; el summary lo declara como no disponible en lugar de presentar un
+dato inventado.
+
+En frontend obtuve 77,31 % de líneas y 80,76 % de ramas. Los umbrales son 70 % para líneas y 75 %
+para ramas, calculados con la misma fórmula y con márgenes de 7,31 y 5,76 puntos. Uso ambas métricas
+como gate. Ramas aporta más información porque distingue los dos caminos de una condición aunque
+la línea que contiene esa condición ya se haya ejecutado.
+
+Subir diez puntos exigiría pruebas de controllers y caminos de error actualmente no recorridos en
+backend. En frontend exigiría cubrir más funciones TypeScript y decisiones restantes, especialmente
+casos alternativos del parser de YouTube y módulos de API. No corresponde elevar primero el número:
+el nuevo umbral debe acompañar tests con asserts significativos.
+
+En backend entran `identity/controller`, `identity/service`, `platform/config`,
+`routines/controller` y `routines/service`. Excluí `cmd/api`, porque solamente compone y arranca la
+aplicación; DAO, DTO y tipos, porque transportan datos; migraciones, porque son DDL e infraestructura;
+database, porque abre la conexión real; y repositories, porque su comportamiento depende de
+PostgreSQL y ya se prueba con tests de integración. Los tests con tag `integration` también quedan
+fuera de la ejecución unitaria porque requieren una base real.
+
+En frontend entran los archivos `src/**/*.ts`. Excluí declaraciones `.d.ts`, archivos `types.ts` y
+`src/test`, porque no contienen reglas productivas. También excluí `.tsx`: el alcance de este gate
+es la lógica TypeScript sin DOM; los componentes mantienen sus pruebas separadas, pero no se mezclan
+en esta medición. La configuración falla si el patrón termina midiendo cero archivos.
+
+Cobertura alta no garantiza corrección. Un ejemplo de esta aplicación sería llamar
+`youtubeEmbedURL(url)` sin ningún `expect`: V8 marcaría sus líneas como ejecutadas aunque el test no
+compruebe la URL producida ni el rechazo de un dominio falso. Coverage detecta código no recorrido;
+los asserts determinan si el resultado fue realmente verificado.
+
+### Ejercicio de rama sin cubrir
+
+El primer reporte marcó una rama parcial en `frontend/src/routines/components/youtube.ts`, línea 24:
+`url.searchParams.get("v") ?? undefined`. La entrada concreta que recorre el lado nulo es
+`https://youtube.com/watch`, una URL de reproducción sin parámetro `v`. Decidí agregarla al caso
+parametrizado de rechazo porque una URL sin identificador no puede producir un embed válido. Tras
+repetir la medición, la cobertura de ramas total subió de 78,84 % a 80,76 % y la del archivo pasó
+de 88 % a 92 %.
+
+### Pipeline y reportes
+
+El workflow conserva los checks `build-backend` y `build-frontend`. Cada job construye la imagen
+final y el target `test` con scopes de cache separados. Después ejecuta el contenedor de tests con
+una carpeta montada, agrega las métricas a `$GITHUB_STEP_SUMMARY` y publica respectivamente los
+artefactos `coverage-backend` y `coverage-frontend`. Los pasos de publicación usan `!cancelled()`
+para conservar los reportes aunque falle un test o un umbral.
+
+Las URLs de la corrida verde, las corridas rojas por cobertura y los dos Pull Requests se agregarán
+junto a sus decisiones cuando existan. No se reemplazarán por capturas.
+
+### Alcance de los asserts asistidos
+
+En el mock backend, los asserts verifican resultado público, una única escritura, datos
+normalizados y hash Argon2id; no cubren conflictos de unicidad devueltos por PostgreSQL. El test de
+entrada inválida verifica `ValidationError` y cero escrituras; no comprueba todos los campos
+inválidos porque esa matriz pertenece al test parametrizado de validación.
+
+En `login`, los asserts del caso exitoso verifican el objeto devuelto y el contrato completo de la
+única llamada HTTP; no cubren una respuesta exitosa con JSON malformado. Los del rechazo verifican
+nombre, estado y cuerpo de `ApiError`, además de una sola llamada; no cubren una falla de red antes
+de recibir respuesta. En sesión, los asserts verifican ambos lados y el borde exacto de expiración,
+además del token sin payload y del payload sin `exp`; no cubren todas las formas posibles de JWT
+corrupto. En YouTube, los
+asserts verifican conversión exacta y rechazo de ejemplos concretos; no pretenden enumerar todos los
+hosts maliciosos posibles.
+
+### Problemas encontrados
+
+Los tests Node cargaban inicialmente un setup que asumía la existencia de `HTMLDialogElement`.
+Protegí esos polyfills con una comprobación de disponibilidad para que el setup compartido funcione
+tanto en jsdom como en Node. La primera medición también incluyó `.tsx` pese al alcance esperado;
+agregué la exclusión explícita. Finalmente, el script backend dependía del directorio desde donde se
+invocaba; ahora resuelve su propia ubicación antes de ejecutar Go y funciona tanto localmente como
+dentro del contenedor. Al ejecutar la suite dentro de Docker apareció además un test no determinista:
+alterar el último carácter Base64URL de una firma JWT puede conservar los mismos bits significativos.
+Ahora se modifica el primer carácter de la firma por otro valor, por lo que el token cambia siempre.
+
+### Uso de inteligencia artificial
+
+Utilicé Codex para auditar la consigna, diseñar y escribir tests, introducir las interfaces mínimas
+de inyección, configurar cobertura, targets Docker, workflow y esta documentación. Verifiqué la
+asistencia ejecutando las suites, `go vet`, compilación frontend, los medidores y una mutación local
+que hizo fallar el borde esperado. También revisé los reportes HTML y JSON para elegir los umbrales
+y localizar la rama sin cubrir. Las operaciones de Git y GitHub se realizaron manualmente.

@@ -9,6 +9,10 @@ COPY index.html tsconfig*.json vite.config.ts ./
 COPY src ./src
 RUN npm run build
 
+FROM build AS test
+
+ENTRYPOINT ["npm", "run", "test:ci"]
+
 FROM nginx:1.28-alpine
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf

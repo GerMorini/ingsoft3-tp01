@@ -421,8 +421,8 @@ para conservar los reportes aunque falle un test o un umbral.
 
 La primera ejecución completa terminó con ambos checks verdes y publicó los dos resúmenes y
 artefactos: [corrida 36154341919](https://github.com/GerMorini/ingsoft3-tp01/actions/runs/36154341919).
-La implementación se desarrolla en el
-[Pull Request 17](https://github.com/GerMorini/ingsoft3-tp01/pull/17).
+La implementación y la secuencia completa se realizaron en el
+[Pull Request 17](https://github.com/GerMorini/ingsoft3-tp01/pull/17), posteriormente fusionado.
 
 Para comprobar el gate backend deshabilité temporalmente tres métodos de prueba, sin cambiar código
 productivo. Los tests restantes y la compilación terminaron correctamente, pero statements bajó a
@@ -433,9 +433,6 @@ demostración sin dejar pruebas deshabilitadas en el resultado final. La
 [corrida 36156745365](https://github.com/GerMorini/ingsoft3-tp01/actions/runs/36156745365)
 confirmó nuevamente ambos checks verdes.
 
-La URL de la corrida verde corregida y la del segundo Pull Request se agregarán junto a sus
-decisiones cuando existan. No se reemplazarán por capturas.
-
 La demostración frontend agregó `describeSessionLoad` y la usó en el detalle de sesión sin agregar
 sus tests. La aplicación compiló y los 49 tests existentes quedaron verdes, pero lines bajó a
 68,18 % y branches a 60 %. Ambos valores quedaron bajo sus umbrales y `build-frontend` bloqueó el
@@ -444,6 +441,30 @@ La corrección agrega entradas para sesión vacía, carga ausente, cantidades in
 parcial y los bordes 30/31 y 60/61 de carga baja, media y alta. Con esos tests, lines llegó a 80 %
 y branches a 85,71 %; ambos checks volvieron a verde en la
 [corrida 36158181986](https://github.com/GerMorini/ingsoft3-tp01/actions/runs/36158181986).
+
+El primer Pull Request cuenta la historia completa: rojo por backend, restauración, rojo por
+frontend, tests nuevos, verde y merge. Para dejar evidencia vigente del bloqueo, el
+[Pull Request 18](https://github.com/GerMorini/ingsoft3-tp01/pull/18) agrega
+`routineScheduleSummary` sin tests y permanece abierto. La aplicación compila y los 60 tests
+existentes pasan, pero lines queda en 74,57 % frente al umbral de 75 %, y branches en 76,92 % frente
+al umbral de 80 %. Por eso `build-frontend` permanece rojo únicamente por coverage en la
+[corrida 36159591922](https://github.com/GerMorini/ingsoft3-tp01/actions/runs/36159591922), mientras
+`build-backend` permanece verde. Este segundo PR no se corrige ni se fusiona antes de la defensa.
+
+### Smoke test final
+
+Antes de fusionar el primer Pull Request ejecuté manualmente la aplicación completa. Verifiqué
+login, navegación, listado de sesiones, detalle de una sesión vacía con `Sin ejercicios`, detalle
+de una sesión configurada con su nivel de carga y creación o edición de una sesión. El recorrido
+terminó sin errores visibles. Este smoke test comprueba integración básica, pero no aporta datos al
+coverage automatizado.
+
+### Estado de cierre
+
+El Pull Request 17 está fusionado y conserva la secuencia rojo-verde. El Pull Request 18 queda
+abierto y bloqueado por coverage. Los checks requeridos continúan siendo `build-backend` y
+`build-frontend`, con modo estricto. No se generaron capturas ni `evidencias.md`: cada prueba está
+enlazada mediante su corrida o Pull Request verificable.
 
 ### Alcance de los asserts asistidos
 

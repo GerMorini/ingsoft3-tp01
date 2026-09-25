@@ -441,7 +441,9 @@ sus tests. La aplicación compiló y los 49 tests existentes quedaron verdes, pe
 68,18 % y branches a 60 %. Ambos valores quedaron bajo sus umbrales y `build-frontend` bloqueó el
 Pull Request: [corrida roja 36157720498](https://github.com/GerMorini/ingsoft3-tp01/actions/runs/36157720498).
 La corrección agrega entradas para sesión vacía, carga ausente, cantidades inválidas, configuración
-parcial y los bordes 30/31 y 60/61 de carga baja, media y alta.
+parcial y los bordes 30/31 y 60/61 de carga baja, media y alta. Con esos tests, lines llegó a 80 %
+y branches a 85,71 %; ambos checks volvieron a verde en la
+[corrida 36158181986](https://github.com/GerMorini/ingsoft3-tp01/actions/runs/36158181986).
 
 ### Alcance de los asserts asistidos
 

@@ -424,7 +424,9 @@ productivo. Los tests restantes y la compilación terminaron correctamente, pero
 21,9 %, debajo del umbral de 25 %. Por eso `build-backend` quedó rojo mientras `build-frontend`
 permaneció verde: [corrida roja 36156384353](https://github.com/GerMorini/ingsoft3-tp01/actions/runs/36156384353).
 Después restauré los tres métodos en el siguiente commit. El historial del Pull Request conserva la
-demostración sin dejar pruebas deshabilitadas en el resultado final.
+demostración sin dejar pruebas deshabilitadas en el resultado final. La
+[corrida 36156745365](https://github.com/GerMorini/ingsoft3-tp01/actions/runs/36156745365)
+confirmó nuevamente ambos checks verdes.
 
 La URL de la corrida roja frontend y la del segundo Pull Request se agregarán junto a sus decisiones
 cuando existan. No se reemplazarán por capturas.

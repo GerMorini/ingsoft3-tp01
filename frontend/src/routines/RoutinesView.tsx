@@ -13,6 +13,7 @@ import { RoutineWizard } from "./RoutineWizard";
 import { FeatureHero } from "./components/FeatureHero";
 import { MediaPreview } from "./components/MediaPreview";
 import { ModalDialog } from "./components/ModalDialog";
+import { routineScheduleSummary } from "./routineSchedule";
 import type {
   RoutineDetail,
   RoutineInput,
@@ -212,6 +213,9 @@ export function RoutinesView({
         {detail && (
           <div className="grid gap-4">
             <p>{detail.description || "Sin descripción."}</p>
+            <p className="font-medium">
+              {routineScheduleSummary(detail.sessions)}
+            </p>
             {detail.sessions.map((assignment) => (
               <details
                 key={`${assignment.session.id}-${assignment.day}`}

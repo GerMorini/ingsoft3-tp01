@@ -312,7 +312,7 @@ temporalmente el límite de día de `> 7` a `>= 7`. El caso `weekday boundaries`
 rechazar el día 7. Luego restauré la condición y el test volvió a verde. La mutación no forma parte
 del código entregado; confirma que el assert protege el borde real.
 
-En el frontend hay siete métodos unitarios directos. Cada archivo declara
+En el frontend hay doce métodos unitarios directos. Cada archivo declara
 `// @vitest-environment node`, por lo que estos tests no dependen del DOM:
 
 | Método | Comportamiento | Técnica destacada |
@@ -324,6 +324,11 @@ En el frontend hay siete métodos unitarios directos. Cada archivo declara
 | `isAccessTokenExpired` rechaza token sin `exp` | La ausencia de vencimiento invalida la sesión | Error |
 | `login` usa el cliente inyectado | Envía una sola solicitud con contrato exacto | Mock `vi.fn()` |
 | `login` transforma un rechazo HTTP | Expone `ApiError` con estado y cuerpo | Mock y error |
+| `describeSessionLoad` recibe una sesión vacía | Informa ausencia de ejercicios | Borde vacío |
+| `describeSessionLoad` recibe carga ausente | Informa que falta configuración | Error funcional |
+| `describeSessionLoad` rechaza cantidades inválidas | Rechaza negativos y decimales | `it.each` y error |
+| `describeSessionLoad` recibe carga parcial | Detecta ejercicios incompletos | Camino alternativo |
+| `describeSessionLoad` clasifica carga | Verifica bordes 30/31 y 60/61 | `it.each` y bordes |
 
 ### Estructura AAA
 
@@ -370,8 +375,8 @@ medición real, conserva 6,2 puntos de margen y frena una caída relevante. Go n
 coverage mediante `go test`; el summary lo declara como no disponible en lugar de presentar un
 dato inventado.
 
-En frontend obtuve 77,31 % de líneas y 80,76 % de ramas. Los umbrales son 70 % para líneas y 75 %
-para ramas, calculados con la misma fórmula y con márgenes de 7,31 y 5,76 puntos. Uso ambas métricas
+En frontend obtuve 80 % de líneas y 85,71 % de ramas. Los umbrales son 75 % para líneas y 80 %
+para ramas, calculados con la misma fórmula y con márgenes de 5 y 5,71 puntos. Uso ambas métricas
 como gate. Ramas aporta más información porque distingue los dos caminos de una condición aunque
 la línea que contiene esa condición ya se haya ejecutado.
 
@@ -428,8 +433,15 @@ demostración sin dejar pruebas deshabilitadas en el resultado final. La
 [corrida 36156745365](https://github.com/GerMorini/ingsoft3-tp01/actions/runs/36156745365)
 confirmó nuevamente ambos checks verdes.
 
-La URL de la corrida roja frontend y la del segundo Pull Request se agregarán junto a sus decisiones
-cuando existan. No se reemplazarán por capturas.
+La URL de la corrida verde corregida y la del segundo Pull Request se agregarán junto a sus
+decisiones cuando existan. No se reemplazarán por capturas.
+
+La demostración frontend agregó `describeSessionLoad` y la usó en el detalle de sesión sin agregar
+sus tests. La aplicación compiló y los 49 tests existentes quedaron verdes, pero lines bajó a
+68,18 % y branches a 60 %. Ambos valores quedaron bajo sus umbrales y `build-frontend` bloqueó el
+Pull Request: [corrida roja 36157720498](https://github.com/GerMorini/ingsoft3-tp01/actions/runs/36157720498).
+La corrección agrega entradas para sesión vacía, carga ausente, cantidades inválidas, configuración
+parcial y los bordes 30/31 y 60/61 de carga baja, media y alta.
 
 ### Alcance de los asserts asistidos
 
@@ -445,7 +457,9 @@ de recibir respuesta. En sesión, los asserts verifican ambos lados y el borde e
 además del token sin payload y del payload sin `exp`; no cubren todas las formas posibles de JWT
 corrupto. En YouTube, los
 asserts verifican conversión exacta y rechazo de ejemplos concretos; no pretenden enumerar todos los
-hosts maliciosos posibles.
+hosts maliciosos posibles. En el resumen de carga, los asserts verifican cada resultado, cantidades
+inválidas y los cuatro bordes de clasificación; no cubren números fuera del rango seguro de
+JavaScript porque el contrato HTTP usa enteros validados por el backend.
 
 ### Problemas encontrados
 

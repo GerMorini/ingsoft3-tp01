@@ -1,15 +1,38 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/gmorini/inge-soft-3/backend/internal/identity/dao"
 	identityerrors "github.com/gmorini/inge-soft-3/backend/internal/identity/errors"
 	"github.com/golang-jwt/jwt/v5"
 )
+
+type identityRepositoryMock struct {
+	createUserCalls []dao.CreateUserParams
+	createdUser     dao.CreatedUser
+	createUserErr   error
+}
+
+func (m *identityRepositoryMock) CreateUser(
+	_ context.Context,
+	params dao.CreateUserParams,
+) (dao.CreatedUser, error) {
+	m.createUserCalls = append(m.createUserCalls, params)
+	return m.createdUser, m.createUserErr
+}
+
+func (m *identityRepositoryMock) FindCredentialsByUsername(
+	context.Context,
+	string,
+) (dao.Credentials, error) {
+	return dao.Credentials{}, identityerrors.ErrUserNotFound
+}
 
 func TestNormalizeAndValidateRegistration(t *testing.T) {
 	tests := []struct {
@@ -132,7 +155,7 @@ func TestTokenManager_Validate(t *testing.T) {
 	}{
 		{name: "immediately before expiration", now: issuedAt.Add(30*time.Minute - time.Second), token: func() string { return token }, wantValid: true},
 		{name: "exactly at expiration", now: issuedAt.Add(30 * time.Minute), token: func() string { return token }},
-		{name: "altered signature", now: issuedAt, token: func() string { return token[:len(token)-1] + "x" }},
+		{name: "altered signature", now: issuedAt, token: func() string { return alterTokenSignature(token) }},
 		{name: "malformed token", now: issuedAt, token: func() string { return "not-a-token" }},
 	}
 
@@ -168,6 +191,16 @@ func TestTokenManager_Validate(t *testing.T) {
 	if _, err := manager.Validate(unsigned); err == nil {
 		t.Fatal("Validate() accepted none algorithm")
 	}
+}
+
+func alterTokenSignature(token string) string {
+	parts := strings.Split(token, ".")
+	replacement := "A"
+	if strings.HasPrefix(parts[2], replacement) {
+		replacement = "B"
+	}
+	parts[2] = replacement + parts[2][1:]
+	return strings.Join(parts, ".")
 }
 
 func TestNormalizeAndValidateRegistration_InvalidFields(t *testing.T) {
@@ -220,6 +253,72 @@ func TestNormalizeAndValidateRegistration_PasswordThresholds(t *testing.T) {
 	if _, err := normalizeAndValidateRegistration(input); err != nil {
 		t.Fatalf("20-character street number rejected: %v", err)
 	}
+}
+
+func TestService_RegisterCallsRepositoryWithNormalizedSecureData(t *testing.T) {
+	repository := &identityRepositoryMock{
+		createdUser: dao.CreatedUser{
+			ID:       42,
+			Username: "ada_01",
+			Email:    "ada@example.com",
+		},
+	}
+	service := newTestService(t, repository)
+
+	created, err := service.Register(t.Context(), validRegistrationInput())
+
+	if err != nil {
+		t.Fatalf("Register() error: %v", err)
+	}
+	if created.ID != 42 || created.Username != "ada_01" || created.Email != "ada@example.com" {
+		t.Fatalf("Register() = %+v", created)
+	}
+	if len(repository.createUserCalls) != 1 {
+		t.Fatalf("CreateUser() calls = %d, want 1", len(repository.createUserCalls))
+	}
+	params := repository.createUserCalls[0]
+	if params.FirstName != "Ada" || params.LastName != "Lovelace" {
+		t.Errorf("normalized name = %q %q", params.FirstName, params.LastName)
+	}
+	if params.Username != "ada_01" || params.Email != "ada@example.com" {
+		t.Errorf("canonical identity = %q %q", params.Username, params.Email)
+	}
+	if params.PasswordHash == validRegistrationInput().Password {
+		t.Fatal("CreateUser() received plaintext password")
+	}
+	if !strings.HasPrefix(params.PasswordHash, "$argon2id$") {
+		t.Fatalf("password hash = %q", params.PasswordHash)
+	}
+}
+
+func TestService_RegisterDoesNotCallRepositoryForInvalidInput(t *testing.T) {
+	repository := &identityRepositoryMock{}
+	service := newTestService(t, repository)
+	input := validRegistrationInput()
+	input.Username = "invalid username"
+
+	_, err := service.Register(t.Context(), input)
+
+	var validation *identityerrors.ValidationError
+	if !errors.As(err, &validation) {
+		t.Fatalf("Register() error = %v, want ValidationError", err)
+	}
+	if len(repository.createUserCalls) != 0 {
+		t.Fatalf("CreateUser() calls = %d, want 0", len(repository.createUserCalls))
+	}
+}
+
+func newTestService(t *testing.T, repository identityRepository) *Service {
+	t.Helper()
+	tokens, err := newTokenManager(strings.Repeat("s", 32), time.Now)
+	if err != nil {
+		t.Fatalf("newTokenManager() error: %v", err)
+	}
+	service, err := New(repository, tokens)
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
+	return service
 }
 
 func validRegistrationInput() RegisterInput {

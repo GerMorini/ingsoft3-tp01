@@ -11,6 +11,7 @@ import {
 } from "./api";
 import { SessionWizard } from "./SessionWizard";
 import { FeatureHero } from "./components/FeatureHero";
+import { describeSessionLoad } from "./sessionLoad";
 import type {
   Exercise,
   SessionDetail,
@@ -29,6 +30,7 @@ export function SessionsView({
   const [items, setItems] = useState<SessionSummary[]>([]);
   const [catalog, setCatalog] = useState<Exercise[]>([]);
   const [details, setDetails] = useState<Record<number, SessionDetail>>({});
+  const [expanded, setExpanded] = useState<Record<number, boolean>>({});
   const [editing, setEditing] = useState<SessionDetail>();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -141,7 +143,9 @@ export function SessionsView({
             key={item.id}
             className="collapse-arrow collapse bg-base-100"
             onToggle={(e) => {
-              if (e.currentTarget.open)
+              const isOpen = e.currentTarget.open;
+              setExpanded((current) => ({ ...current, [item.id]: isOpen }));
+              if (isOpen)
                 void detail(item.id).catch(() =>
                   setMessage("No se pudo cargar la sesión."),
                 );
@@ -155,6 +159,11 @@ export function SessionsView({
               </p>
             </summary>
             <div className="collapse-content">
+              {expanded[item.id] && details[item.id] && (
+                <p className="mb-3 font-medium">
+                  {describeSessionLoad(details[item.id].exercises)}
+                </p>
+              )}
               <ol className="grid gap-2">
                 {details[item.id]?.exercises.map((x) => (
                   <li

@@ -23,8 +23,11 @@ export async function register(input: RegisterInput): Promise<RegisteredUser> {
   return (await response.json()) as RegisteredUser
 }
 
-export async function login(input: LoginInput): Promise<LoginResult> {
-  const response = await fetch('/api/auth/login', {
+export async function login(
+  input: LoginInput,
+  fetcher: typeof fetch = fetch,
+): Promise<LoginResult> {
+  const response = await fetcher('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),

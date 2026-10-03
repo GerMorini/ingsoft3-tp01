@@ -24,6 +24,7 @@ go test \
   ./internal/identity/controller \
   ./internal/identity/service \
   ./internal/platform/config \
+  ./internal/platform/health \
   ./internal/routines/controller \
   ./internal/routines/service \
   -coverprofile="$profile" >"$coverage_log" 2>&1 || coverage_status=$?

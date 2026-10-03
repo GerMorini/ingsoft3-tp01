@@ -15,6 +15,7 @@ import (
 	identityservice "github.com/gmorini/inge-soft-3/backend/internal/identity/service"
 	"github.com/gmorini/inge-soft-3/backend/internal/platform/config"
 	"github.com/gmorini/inge-soft-3/backend/internal/platform/database"
+	"github.com/gmorini/inge-soft-3/backend/internal/platform/health"
 	routinescontroller "github.com/gmorini/inge-soft-3/backend/internal/routines/controller"
 	routinesrepository "github.com/gmorini/inge-soft-3/backend/internal/routines/repository"
 	routinesservice "github.com/gmorini/inge-soft-3/backend/internal/routines/service"
@@ -65,6 +66,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	routinesService := routinesservice.New(routinesRepository)
 	routinesController := routinescontroller.New(routinesService, logger)
 	mux := http.NewServeMux()
+	health.New(pool).RegisterRoutes(mux)
 	identityController.RegisterRoutes(mux)
 	routinesController.RegisterRoutes(mux, identityController.Authenticate)
 

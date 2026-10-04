@@ -51,7 +51,7 @@ export const getExercise = (id: number, onUnauthorized?: UnauthorizedHandler) =>
   authorizedRequest<Exercise>(`/api/exercises/${id}`, {}, onUnauthorized)
 
 export const createExercise = (input: ExerciseInput, onUnauthorized?: UnauthorizedHandler) =>
-  authorizedRequest<Exercise>('/api/exercise', { method: 'POST', body: JSON.stringify(input) }, onUnauthorized)
+  authorizedRequest<Exercise>('/api/exercises', { method: 'POST', body: JSON.stringify(input) }, onUnauthorized)
 
 export const updateExercise = (id: number, input: ExerciseInput, onUnauthorized?: UnauthorizedHandler) =>
   authorizedRequest<Exercise>(`/api/exercises/${id}`, { method: 'PUT', body: JSON.stringify(input) }, onUnauthorized)

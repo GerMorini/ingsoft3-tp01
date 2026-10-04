@@ -134,7 +134,7 @@ export function RoutinesView({
     <section>
       <FeatureHero
         title="Rutinas"
-        description="Visualiza y ajusta tus rutinas"
+        description="Planifica tus sesiones y distribúyelas durante la semana"
         icon={CalendarDays}
       />
       <div className="mb-6 flex flex-wrap justify-between gap-4">

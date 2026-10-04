@@ -91,7 +91,7 @@ export function ExercisesView({
     <section>
       <FeatureHero
         title="Ejercicios"
-        description="Crea y consulta ejercicios para tus sesiones"
+        description="Crea ejercicios con instrucciones y material multimedia"
         icon={Dumbbell}
       />
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">

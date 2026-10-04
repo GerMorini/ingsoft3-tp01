@@ -1,6 +1,33 @@
 # Decisiones técnicas
 
-## Enlaces de este TP
+## Enlaces del TP7
+
+### Imágenes y entornos
+
+- [Backend en GHCR](https://github.com/GerMorini/ingsoft3-tp01/pkgs/container/ingsoft3-tp01-backend),
+  con la imagen verificada `sha-ebc822ee8b165ba26c1717f7dae484faee5d08af`.
+- [Frontend en GHCR](https://github.com/GerMorini/ingsoft3-tp01/pkgs/container/ingsoft3-tp01-frontend),
+  con la imagen verificada `sha-ebc822ee8b165ba26c1717f7dae484faee5d08af`.
+- QA: [frontend](https://fitpro-germorini-front-qa.onrender.com) y
+  [API](https://fitpro-germorini-api-qa.onrender.com/health).
+- PROD: [frontend](https://fitpro-germorini-front-prod.onrender.com) y
+  [API](https://fitpro-germorini-api-prod.onrender.com/health).
+
+### Gate de integración y E2E
+
+El commit que rompió el alta desde el frontend fue
+`a2ccfb8f8d4ad6867f2355bf33ba7763a35e32b5`. La
+[corrida roja](https://github.com/GerMorini/ingsoft3-tp01/actions/runs/37242973773) conservó verdes
+el smoke y la integración, dejó E2E en rojo y omitió PROD. Publicó por separado el
+[reporte de integración](https://github.com/GerMorini/ingsoft3-tp01/actions/runs/37242973773/artifacts/11318166158)
+y el [reporte E2E](https://github.com/GerMorini/ingsoft3-tp01/actions/runs/37242973773/artifacts/11318186320).
+
+La [corrida corregida](https://github.com/GerMorini/ingsoft3-tp01/actions/runs/37243527435)
+ejecutó la cadena completa hasta PROD con la imagen
+`sha-ebc822ee8b165ba26c1717f7dae484faee5d08af`: tres pruebas de integración y tres E2E verdes,
+aprobación humana y smoke productivo.
+
+## Enlaces del TP6
 
 ### Paquetes públicos
 
@@ -707,3 +734,153 @@ Verifiqué la asistencia con `go test ./...`, `go vet ./...`, coverage, 60 tests
 Vite, builds y targets Docker, `actionlint`, Docker Compose y consultas HTTP reales. Revisé los logs
 de Actions, los commits `Live` y los datos separados en Neon. Las cuentas, secrets, operaciones Git,
 squash merges, configuración externa, rechazo, aprobación y rollback fueron ejecutados manualmente.
+
+## TP7 — Contenedores, integración y E2E
+
+### Build once, deploy many
+
+En TP6 el pipeline publicaba imágenes, pero Render reconstruía el mismo commit para cada entorno.
+Dos construcciones del mismo código pueden resolver una imagen base o dependencia diferente y
+producir binarios distintos. En TP7 la unidad de release pasó a ser la imagen: CI la construye y
+publica una vez, QA la prueba y PROD recibe exactamente la misma referencia.
+
+Los cuatro servicios existentes se cambiaron en el mismo lugar de Git a `Existing Image`; no creé
+servicios ni URLs nuevas. La imagen configurada inicialmente fue la del último merge de TP6,
+`sha-af443cb94915c355dc810285e8a572afc9020302`. Esa referencia es solamente el valor predeterminado
+del servicio. No es necesariamente la que corre después: cada hook recibe `imgURL` con el SHA de su
+corrida y Render despliega esa etiqueta sin cambiar el valor predeterminado.
+
+Las imágenes se publican al terminar los jobs `build-backend` y `build-frontend`, antes del deploy
+de QA y antes de la aprobación productiva. Publicarlas no actualiza Render: un servicio basado en
+imagen no observa automáticamente el registry. `deploy-qa` solicita expresamente la imagen nueva y
+la aprobación sólo habilita que `deploy-prod` solicite esa misma referencia. De esa forma registrar
+un artefacto y ejecutarlo son operaciones independientes.
+
+Cada imagen tiene una única etiqueta `sha-<commit>`; no publico `latest` porque es un puntero móvil y
+no permite reconstruir la historia de una promoción. La etiqueta por commit aporta trazabilidad,
+pero sigue siendo mutable si alguien vuelve a publicarla. El digest `sha256:…` identifica contenido
+inmutable y sería el paso siguiente para una garantía criptográfica completa.
+
+Git usa `v7.0.0` como nombre humano de la release. Para llegar de la release al binario se obtiene el
+commit con `git rev-list -n1 v7.0.0` y se busca `sha-<ese commit>` en ambos paquetes. El tag se coloca
+sobre el deployment activo de `production`, no simplemente sobre el último commit de `main`.
+
+Desde afuera, el workflow muestra el `imgURL` exacto utilizado y GHCR muestra la misma etiqueta. En
+Render, los Events de API y frontend indican `Triggered via Deploy Hook` y nombran esa imagen. El
+smoke no demuestra identidad: sólo confirma que API, base, frontend y proxy responden; una versión
+anterior todavía viva también podría contestarlo. Por eso la comprobación de Events sigue siendo
+manual en este TP.
+
+### Integración amplia contra QA
+
+La suite `frontend/e2e/api.spec.js` utiliza el fixture HTTP `request` de Playwright, sin navegador,
+dobles ni una base levantada en el runner. Se autentica contra la API pública de QA y recorre el
+driver y PostgreSQL reales. Sus tres pruebas son:
+
+1. Crear un ejercicio, encontrarlo en el listado, borrarlo y comprobar su ausencia.
+2. Enviar un nombre vacío, comprobar `400`, el error de `name` y que ningún ID nuevo aparezca.
+3. Crear, actualizar, consultar el valor persistido, borrar y comprobar la ausencia.
+
+Las pruebas crean nombres con timestamp y UUID. Las que escriben guardan el ID y ejecutan limpieza
+defensiva en `finally`, además de afirmar el borrado dentro del flujo. Reutilizan un usuario técnico
+de QA guardado como `QA_TEST_USERNAME` y `QA_TEST_PASSWORD` en secrets del environment `qa`; crear
+un usuario por corrida habría dejado datos sin forma de eliminar porque FitPro no expone borrado de
+cuentas.
+
+Esta es integración amplia: prueba además que el despliegue público, configuración, red, driver y
+base real se entiendan. Frente a una integración estrecha, gana fidelidad y evita mantener otro
+PostgreSQL en Actions. Pierde aislamiento, depende de disponibilidad externa y llega después del
+deploy. Una suite estrecha con API y PostgreSQL descartables fallaría antes y sería más determinista,
+pero exigiría más infraestructura y no comprobaría el entorno ya desplegado.
+
+### Flujos E2E reales
+
+La suite `frontend/e2e/fitpro.spec.js` usa Chromium contra el frontend público de QA. No intercepta
+red ni inventa respuestas. Cada prueba inicia sesión mediante UI, abre Ejercicios e interactúa con
+controles por roles y nombres accesibles. Los tres flujos son:
+
+1. Crear un ejercicio, verlo en su tarjeta, eliminarlo y comprobar que desaparece.
+2. Intentar crear sin nombre, ver `Nombre es obligatorio` y comprobar que la lista no cambia.
+3. Crear, editar, recargar, comprobar persistencia, eliminar y comprobar desaparición.
+
+Elegí creación y edición porque son operaciones centrales de FitPro y atraviesan frontend, proxy,
+autenticación, API y base. No repetí bordes de contraseña, JWT, URLs multimedia ni reglas numéricas:
+los unitarios los cubren con mayor velocidad y diagnóstico. La integración tampoco valida botones o
+mensajes, y la E2E no reemplaza la precisión de los unitarios; cada capa responde una pregunta
+distinta.
+
+Playwright usa 60 segundos por test, 15 por assertion y un solo retry. Los tiempos permiten absorber
+latencia del tier gratuito después de que el smoke despierta QA. No hay `sleep`: Playwright espera
+condiciones observables. Un test que pasa recién al reintentar queda marcado como flaky; si se repite,
+debe corregirse porque un rojo intermitente entrena al equipo a ignorar fallos reales. Un solo worker
+evita que las pruebas de cada suite compitan por la misma cuenta.
+
+### Gate y diagnóstico demostrado
+
+La cadena declara `integracion` con `needs: deploy-qa`, `e2e` con `needs: integracion` y
+`deploy-prod` con `needs: e2e`. Sólo los pasos que publican reportes usan `!cancelled()`. Las pruebas
+no tienen `continue-on-error`, `|| true`, salidas artificiales ni skips. Por eso un fallo impide que
+producción siquiera solicite aprobación.
+
+Para probar que el gate podía decir que no, el commit
+`a2ccfb8f8d4ad6867f2355bf33ba7763a35e32b5` cambió código real del frontend: el alta llamó a
+`POST /api/exercise` en vez de `POST /api/exercises`. No se modificaron los tests. Compilación, 60
+unitarios y coverage quedaron verdes; QA desplegó y el smoke también quedó verde. La integración
+directa completó `3 passed`, mientras la E2E terminó con dos flujos rojos, uno verde y PROD omitido.
+
+El diagnóstico salió del reporte, no de releer el cambio: la traza de red mostró
+`POST /api/exercise → 404`; el wizard permanecía abierto después de guardar. Integración verde más
+E2E roja significa que API y base podían crear, leer, actualizar y borrar correctamente, pero el
+frontend dejó de usar el contrato adecuado. Si se hubiera roto la API, integración habría quedado
+roja y E2E no habría arrancado.
+
+El endpoint se restauró en `ebc822ee8b165ba26c1717f7dae484faee5d08af`. La corrida posterior dejó
+las seis pruebas verdes, llegó al reviewer de `production` y promovió el mismo tag verificado en QA.
+
+### Configuración, límites y recuperación
+
+La imagen frontend es idéntica en ambos entornos. El bundle no contiene la dirección de la API:
+Nginx resuelve `BACKEND_URL` al arrancar. QA configura la API QA y PROD la API PROD; cambiar entorno
+no recompila Vite ni crea otra imagen.
+
+QA es compartido por todas las corridas. Dos merges próximos podrían hacer que una corrida pruebe la
+imagen desplegada por otra. Se reconoce comparando el SHA del run con Events y horarios de Render.
+La corrida anterior se descarta, no se reejecutan solamente sus pruebas y se considera válida la más
+nueva que incluye ambos cambios. Durante este TP apliqué la regla de un merge por vez. Un sistema real
+usaría un entorno efímero por corrida.
+
+Si una imagen promovida falla, la recuperación consiste en enviar al hook la etiqueta o digest de
+una versión anterior que permanezca en GHCR. No necesita reconstrucción. Las migraciones continúan
+siendo un riesgo separado: volver el contenedor no revierte datos ni garantiza compatibilidad hacia
+atrás.
+
+### Problemas encontrados
+
+- Render no redesplegó al cambiar la fuente del primer servicio. Ejecuté la única prueba manual
+  permitida mediante su deploy hook y confirmé `Triggered via Deploy Hook` con la imagen elegida.
+- Los selectores iniciales de contraseña y del botón `Crear ejercicio` coincidían con controles de
+  cierre cuyos nombres contenían el mismo texto. Los hice inequívocos mediante rol y coincidencia
+  exacta, sin recurrir a clases CSS.
+- Compose conservaba una contraseña PostgreSQL de un volumen anterior. Reutilicé el `.env` local en
+  lugar de destruir datos o cambiar la credencial persistida.
+- Un contenedor de validación dejó reportes locales con propietario root. Corregí únicamente permisos
+  de las carpetas generadas, que además están ignoradas por Git.
+- `npm audit` reportó cuatro vulnerabilidades sólo en herramientas de desarrollo preexistentes
+  (`vitest` y `undici` mediante jsdom); `npm audit --omit=dev` quedó en cero. No cambié las versiones
+  fijadas para TP5 dentro de este trabajo.
+
+No agregué capturas ni `evidencias.md`. Actions conserva ambas suites y sus reportes; Render Events,
+que no son públicos, se mostrarán en vivo durante la defensa.
+
+### Uso de inteligencia artificial
+
+Utilicé Codex para auditar la consigna, adaptar Playwright a los contratos de FitPro, escribir las
+seis pruebas, configurar sus reportes, encadenar el workflow, diagnosticar la corrida roja y redactar
+esta sección. La configuración de Render, usuario técnico, secrets, operaciones Git, squash merges y
+aprobaciones fueron ejecutadas manualmente.
+
+Verifiqué la asistencia con 60 unitarios, coverage, build de Vite, `actionlint`, Docker, Compose,
+tres pruebas HTTP contra PostgreSQL, tres flujos Chromium, pulls anónimos de ambas imágenes y las
+corridas reales. Para cada prueba revisé sus assertions y su límite: las de integración no ven la
+pantalla; las E2E sólo cubren los tres recorridos elegidos; ninguna demuestra identidad de imagen sin
+contrastar Events o incorporar el SHA al endpoint de vida.

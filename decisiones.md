@@ -1,5 +1,32 @@
 # Decisiones técnicas
 
+## Enlaces de este TP
+
+### Paquetes públicos
+
+- [Backend en GHCR](https://github.com/GerMorini/ingsoft3-tp01/pkgs/container/ingsoft3-tp01-backend),
+  publicado como `ghcr.io/germorini/ingsoft3-tp01-backend`.
+- [Frontend en GHCR](https://github.com/GerMorini/ingsoft3-tp01/pkgs/container/ingsoft3-tp01-frontend),
+  publicado como `ghcr.io/germorini/ingsoft3-tp01-frontend`.
+
+Ambos paquetes son públicos, admiten `docker pull` sin credenciales y poseen tags inmutables con el
+formato `sha-<commit>`. La primera publicación comprobada corresponde al merge
+`1ead1422b16dd4fc6993bed2ef0a2bf19072a739`.
+
+### Cadena de publicación
+
+- [Job de un Pull Request](https://github.com/GerMorini/ingsoft3-tp01/actions/runs/37160475916/job/111312692992):
+  los tests quedan verdes, pero el login a GHCR aparece salteado y no se publica la imagen.
+- [Job de `main`](https://github.com/GerMorini/ingsoft3-tp01/actions/runs/37160680084/job/111313288747):
+  después de tests, coverage y artefacto, `Construir y publicar backend` es el último paso propio.
+
+### Entornos desplegados
+
+- QA: [frontend](https://fitpro-germorini-front-qa.onrender.com) y
+  [API](https://fitpro-germorini-api-qa.onrender.com/health).
+- PROD: [frontend](https://fitpro-germorini-front-prod.onrender.com) y
+  [API](https://fitpro-germorini-api-prod.onrender.com/health).
+
 ## TP1
 
 ### Conflicto de merge
@@ -502,3 +529,181 @@ de inyección, configurar cobertura, targets Docker, workflow y esta documentaci
 asistencia ejecutando las suites, `go vet`, compilación frontend, los medidores y una mutación local
 que hizo fallar el borde esperado. También revisé los reportes HTML y JSON para elegir los umbrales
 y localizar la rama sin cubrir. Las operaciones de Git y GitHub se realizaron manualmente.
+
+## TP6 — Entrega continua y entornos
+
+### Artefacto publicado
+
+El pipeline publica dos imágenes finales en GHCR, una para backend y otra para frontend. Cada tag
+incluye el SHA completo del commit de `main` que la produjo. No uso `latest`, porque un tag móvil no
+permite saber qué código contiene ni repetir un despliegue anterior con certeza.
+
+La garantía depende de tres controles encadenados. La protección de `main` exige los checks verdes;
+el login y el `push` a GHCR se habilitan solamente para un evento `push` sobre `main`; y la
+construcción/publicación de la imagen final ocurre después de tests, coverage y artefactos. Si una
+imagen se publicara antes de verificar, el registry dejaría de significar "versión aprobada" y sólo
+sería un depósito de builds. Esta cadena no impide que un propietario publique manualmente con
+`docker push`; para una garantía más fuerte usaría permisos de registry separados y promocionaría
+por digest, no solamente por tag.
+
+La imagen `scratch` del backend incorpora el bundle de certificados de CA. Sin él, el binario
+estático puede compilar y arrancar, pero no validar el certificado TLS de Neon. Las imágenes fueron
+comprobadas mediante pulls anónimos con una configuración Docker temporal sin credenciales.
+
+### QA y producción
+
+Los dos entornos usan servicios Render separados para API y frontend. Cada uno tiene una URL
+pública y `Auto-Deploy` desactivado; Render sólo despliega cuando el workflow llama a sus hooks.
+Neon contiene las bases `fitpro_qa` y `fitpro_prod`. Registré un usuario exclusivamente desde QA y
+comprobé mediante SQL que existía en `fitpro_qa` y no en `fitpro_prod`.
+
+La configuración que cambia por entorno queda afuera de las imágenes:
+
+- Backend: `DATABASE_URL`, `HTTP_ADDR` y `JWT_SECRET`.
+- Frontend: `BACKEND_URL` y `DNS_RESOLVER`.
+- GitHub: hooks secretos y URLs públicas dentro de cada environment.
+
+Dentro de la imagen permanecen el binario Go, las migraciones embebidas, los certificados, el
+`dist` de Vite, Nginx y su plantilla. La imagen frontend define valores predeterminados útiles para
+Compose, pero Render los reemplaza al arrancar. `NGINX_ENVSUBST_FILTER` limita la sustitución a las
+dos variables de entorno y evita borrar variables propias de Nginx como `$uri` y `$host`. Por eso
+la misma receta puede apuntar a la API QA o PROD sin recompilar el bundle.
+
+Los secrets `RENDER_HOOK_API` y `RENDER_HOOK_FRONT` existen con el mismo nombre en `qa` y
+`production`, pero su alcance es distinto. El job recibe únicamente los valores de su environment.
+Las URLs no son credenciales y se guardan como variables `API_URL` y `FRONT_URL`. Ningún secret fue
+copiado al repositorio ni impreso en logs.
+
+### Cadena de promoción
+
+`build-backend` y `build-frontend` continúan en paralelo. `deploy-qa` declara
+`needs: [build-backend, build-frontend]`, corre sólo en pushes a `main` y usa el environment `qa` sin
+reviewers. Los hooks reciben `&ref=$GITHUB_SHA`; así Render reconstruye el commit verificado y no la
+punta que tenga la rama cuando procese la solicitud.
+
+`deploy-prod` necesita que `deploy-qa` termine verde y usa el environment protegido `production`.
+No repite el `if` de rama: en un PR, `deploy-qa` queda omitido y la dependencia impide llegar a
+PROD. Producción exige a `GerMorini` como reviewer, con `Prevent self-review` desactivado. Además,
+su grupo de concurrencia no cancela un despliegue iniciado, para evitar que dos promociones dejen
+un estado ambiguo.
+
+La [corrida automática de QA](https://github.com/GerMorini/ingsoft3-tp01/actions/runs/37213103523)
+muestra ambos builds, publicación, hooks y smoke verdes. La
+[corrida rechazada](https://github.com/GerMorini/ingsoft3-tp01/actions/runs/37214209194) llegó a QA,
+pero bloqueó PROD con el motivo de revisar que ambos hooks apuntaran a servicios productivos. El
+rechazo dejó la corrida roja sin ejecutar ningún step de producción. En la
+[corrida aprobada](https://github.com/GerMorini/ingsoft3-tp01/actions/runs/37214810570), QA quedó
+verde, el reviewer aprobó y el smoke de PROD terminó correctamente.
+
+Implementé Continuous Delivery: todo merge verificado llega automáticamente a QA y queda listo para
+PROD, pero una persona decide la promoción final. No es Continuous Deployment, porque ese último
+gate sigue presente. En este proyecto individual el gate enseña y deja trazabilidad; en un sistema
+con tests y observabilidad maduros, cambios de riesgo bajo podrían automatizarse y reservar el
+control humano para operaciones sensibles. Desplegar pone una versión a correr; liberar una
+funcionalidad a usuarios podría ser una decisión posterior mediante feature flags.
+
+### Criterios del gate humano
+
+Antes de aprobar revisé los checks requeridos, el smoke de QA, el commit mostrado como `Live` por
+ambos servicios Render, las cuatro rutas públicas y el cambio visible esperado. También comprobé
+separación de bases y destino de hooks. El aprobador no puede saber con esta evidencia si aumentó la
+latencia, si hay errores poco frecuentes o si una regla de negocio degradó silenciosamente: faltan
+métricas, trazas, alertas y pruebas sintéticas de flujos autenticados.
+
+El rechazo no fue decorativo. Expresó que QA respondía, pero todavía debía verificarse que ambos
+hooks productivos apuntaran a PROD y no a QA. GitHub registró quién rechazó, el motivo y que el job
+no obtuvo acceso a los secrets productivos.
+
+### Smoke tests y límites
+
+Cada smoke realiza hasta 30 intentos separados por 20 segundos, con timeout de 10 segundos por
+solicitud. Comprueba:
+
+1. `/health` directo en la API: proceso HTTP vivo.
+2. `/api/ready` directo: backend puede hacer `Ping` a PostgreSQL.
+3. `/` en el frontend: Nginx sirve la SPA.
+4. `/api/ready` mediante frontend: proxy, backend y base funcionan juntos.
+
+No prueba login, autorización, escritura, reglas de negocio ni que la versión nueva sea la que
+respondió. El hook de Render es asíncrono y la versión anterior permanece atendiendo durante el
+build; por eso un smoke puede quedar verde antes de que termine el despliegue. Mitigué esa
+limitación comprobando manualmente en Render el SHA `Live` y un texto visible. Una mejora futura es
+exponer el SHA de compilación en `/health` y compararlo automáticamente con `$GITHUB_SHA`.
+
+Render reconstruye desde el repositorio. Aunque usa el mismo commit, no ejecuta la imagen que CI
+publicó: una imagen base o dependencia podría cambiar entre ambos builds. Por eso se pierde la
+garantía binaria de "promover exactamente lo probado". El TP7 puede reemplazar esta reconstrucción
+por el despliegue de la imagen GHCR identificada por tag o digest.
+
+El tier gratuito de Render comparte 750 horas mensuales por workspace, duerme servicios inactivos y
+puede introducir cold starts cercanos a un minuto. También limita minutos de build. Neon suspende
+el cómputo inactivo y limita almacenamiento y horas de cómputo. Los reintentos absorben cold starts,
+pero no resuelven agotamiento de cuota; en ese caso el pipeline falla y no debe promover.
+
+### Estrategia para una producción real
+
+Elegiría blue-green. Mantendría una versión activa y otra candidata, validaría la candidata con
+smokes y cambiaría el tráfico de forma atómica. Si aparece un defecto, volvería el router a la
+versión anterior sin reconstruir. Es apropiado para FitPro porque prioriza un rollback simple y
+reduce el tiempo de indisponibilidad.
+
+El costo es aproximadamente duplicar infraestructura durante la promoción. Las migraciones deben
+seguir expand-contract: primero agregar cambios compatibles, desplegar ambas versiones y retirar
+lo viejo después. No elegiría canary todavía. Repartir tráfico gradualmente sin métricas de error,
+latencia, trazas y alertas por versión sólo distribuye el riesgo sin una señal objetiva para decidir
+si avanzar o retroceder.
+
+### Rollback ejecutado
+
+Primero desplegué en PROD el commit
+`45b93279c6a6560d254bab619c58dfc87498d9a2`, visible por el nuevo texto de Ejercicios. Después llamé
+los dos hooks productivos con el commit bueno anterior
+`352291fe670b0081be7095f8c7b093e96db21ed0`. Esperé que API y frontend mostraran ese SHA como `Live`
+y repetí `/api/ready` y la comprobación del texto anterior.
+
+Render registró estos tiempos:
+
+| Servicio | Inicio | Live | Duración |
+|---|---:|---:|---:|
+| API PROD | 13:19:16 | 13:19:40 | 24 segundos |
+| Front PROD | 13:19:16 | 13:19:43 | 27 segundos |
+| Rollback completo | 13:19:16 | 13:19:43 | **27 segundos** |
+
+La medición manual inicial dio 263 segundos porque incluyó el tiempo que tardé en observar y anotar
+el estado. Para el valor técnico usé el inicio más temprano y el `Live` más tardío de Render. La
+prueba ejercita el tiempo medio de restauración, una métrica DORA.
+
+El procedimiento actual es identificar el último SHA bueno, copiar los hooks PROD sin exponerlos,
+llamarlos con `&ref=<sha>`, esperar ambos estados `Live` y ejecutar los cuatro smokes. Este rollback
+revierte código, no datos. Una migración destructiva o escrituras incompatibles exigirían backup,
+PITR y un plan de restauración; las migraciones embebidas actuales son ascendentes y no sustituyen
+esa estrategia.
+
+### Problemas encontrados
+
+- La imagen `scratch` no tenía certificados raíz para Neon. Copié solamente el bundle de CA desde
+  la etapa de build.
+- Nginx tenía fija la dirección `backend:8080`. La convertí en plantilla procesada al arrancar y
+  limité `envsubst` para conservar sus variables internas.
+- El environment `production` quedó inicialmente con `Prevent self-review: true`. Lo detecté con la
+  API de GitHub y lo corregí antes de fusionar el gate.
+- Al revisar el primer despliegue pareció que sólo se reconstruía el frontend. Los logs de Actions
+  mostraron dos IDs de deploy distintos y Render confirmó ambos builds.
+- El smoke puede consultar la versión anterior mientras Render construye. Conservé esa limitación
+  explícita y verifiqué el commit en Render antes de aprobar.
+- El cronómetro manual sobreestimó el rollback. Recalculé el dato con timestamps de inicio y `Live`
+  de ambos despliegues.
+
+No creé capturas ni `evidencias.md`. Las corridas, deployments, paquetes y releases son recursos
+navegables del repositorio público.
+
+### Uso de inteligencia artificial
+
+Utilicé Codex para auditar la guía, implementar health y readiness, adaptar Docker y Nginx,
+configurar publicación, jobs de deploy, smokes y redactar esta sección. También asistió en el
+diagnóstico de environments, hooks y medición del rollback.
+
+Verifiqué la asistencia con `go test ./...`, `go vet ./...`, coverage, 60 tests frontend, build de
+Vite, builds y targets Docker, `actionlint`, Docker Compose y consultas HTTP reales. Revisé los logs
+de Actions, los commits `Live` y los datos separados en Neon. Las cuentas, secrets, operaciones Git,
+squash merges, configuración externa, rechazo, aprobación y rollback fueron ejecutados manualmente.

@@ -212,3 +212,50 @@ jobs:
 
           echo "QA no respondio correctamente" >&2
           exit 1
+
+  deploy-prod:
+    needs: deploy-qa
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    environment:
+      name: production
+      url: ${{ vars.FRONT_URL }}
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - name: Disparar deploy PROD del commit aprobado
+        env:
+          HOOK_API: ${{ secrets.RENDER_HOOK_API }}
+          HOOK_FRONT: ${{ secrets.RENDER_HOOK_FRONT }}
+        run: |
+          curl --fail --silent --show-error --max-time 30 \
+            "${HOOK_API}&ref=${GITHUB_SHA}"
+          curl --fail --silent --show-error --max-time 30 \
+            "${HOOK_FRONT}&ref=${GITHUB_SHA}"
+
+      - name: Esperar y verificar PROD
+        env:
+          API_URL: ${{ vars.API_URL }}
+          FRONT_URL: ${{ vars.FRONT_URL }}
+        run: |
+          for attempt in $(seq 1 30); do
+            echo "Intento ${attempt}/30"
+            if curl --fail --silent --show-error --max-time 10 \
+                "${API_URL}/health" >/dev/null \
+              && curl --fail --silent --show-error --max-time 10 \
+                "${API_URL}/api/ready" >/dev/null \
+              && curl --fail --silent --show-error --max-time 10 \
+                "${FRONT_URL}/" >/dev/null \
+              && curl --fail --silent --show-error --max-time 10 \
+                "${FRONT_URL}/api/ready" >/dev/null; then
+              echo "PROD responde: API, base, frontend y proxy"
+              exit 0
+            fi
+            sleep 20
+          done
+
+          echo "PROD no respondio correctamente" >&2
+          exit 1

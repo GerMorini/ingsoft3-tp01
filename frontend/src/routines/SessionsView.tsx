@@ -115,7 +115,7 @@ export function SessionsView({
     <section>
       <FeatureHero
         title="Sesiones"
-        description="Organiza ejercicios y define su orden de ejecución"
+        description="Organiza ejercicios, define su orden y consulta la carga estimada"
         icon={ListChecks}
       />
       <div className="mb-6 flex flex-wrap justify-between gap-4">

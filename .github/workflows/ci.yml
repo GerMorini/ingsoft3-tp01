@@ -179,15 +179,18 @@ jobs:
       name: qa
       url: ${{ vars.FRONT_URL }}
     steps:
-      - name: Disparar deploy QA del commit verificado
+      - name: Desplegar en QA las imagenes verificadas
+        shell: bash
         env:
           HOOK_API: ${{ secrets.RENDER_HOOK_API }}
           HOOK_FRONT: ${{ secrets.RENDER_HOOK_FRONT }}
         run: |
+          IMG_API="ghcr.io/germorini/ingsoft3-tp01-backend:sha-${GITHUB_SHA}"
+          IMG_FRONT="ghcr.io/germorini/ingsoft3-tp01-frontend:sha-${GITHUB_SHA}"
           curl --fail --silent --show-error --max-time 30 \
-            "${HOOK_API}&ref=${GITHUB_SHA}"
+            --get --data-urlencode "imgURL=${IMG_API}" "${HOOK_API}"
           curl --fail --silent --show-error --max-time 30 \
-            "${HOOK_FRONT}&ref=${GITHUB_SHA}"
+            --get --data-urlencode "imgURL=${IMG_FRONT}" "${HOOK_FRONT}"
 
       - name: Esperar y verificar QA
         env:
@@ -213,8 +216,84 @@ jobs:
           echo "QA no respondio correctamente" >&2
           exit 1
 
-  deploy-prod:
+  integracion:
     needs: deploy-qa
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: qa
+    steps:
+      - name: Bajar el codigo
+        uses: actions/checkout@v6
+
+      - name: Preparar Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+        working-directory: ./frontend
+
+      - name: Probar API y base de QA
+        env:
+          API_BASE_URL: ${{ vars.API_URL }}
+          QA_TEST_USERNAME: ${{ secrets.QA_TEST_USERNAME }}
+          QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+        run: npx playwright test e2e/api.spec.js
+        working-directory: ./frontend
+
+      - name: Publicar reporte de integracion
+        uses: actions/upload-artifact@v6
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report-integracion
+          path: frontend/playwright-report
+          retention-days: 7
+
+  e2e:
+    needs: integracion
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: qa
+    steps:
+      - name: Bajar el codigo
+        uses: actions/checkout@v6
+
+      - name: Preparar Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar dependencias y Chromium
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+        working-directory: ./frontend
+
+      - name: Probar flujos completos contra QA
+        env:
+          E2E_BASE_URL: ${{ vars.FRONT_URL }}
+          QA_TEST_USERNAME: ${{ secrets.QA_TEST_USERNAME }}
+          QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+        run: npx playwright test e2e/fitpro.spec.js
+        working-directory: ./frontend
+
+      - name: Publicar reporte e2e
+        uses: actions/upload-artifact@v6
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report-e2e
+          path: frontend/playwright-report
+          retention-days: 7
+
+  deploy-prod:
+    needs: e2e
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -226,15 +305,18 @@ jobs:
       group: deploy-production
       cancel-in-progress: false
     steps:
-      - name: Disparar deploy PROD del commit aprobado
+      - name: Desplegar en PROD las imagenes aprobadas
+        shell: bash
         env:
           HOOK_API: ${{ secrets.RENDER_HOOK_API }}
           HOOK_FRONT: ${{ secrets.RENDER_HOOK_FRONT }}
         run: |
+          IMG_API="ghcr.io/germorini/ingsoft3-tp01-backend:sha-${GITHUB_SHA}"
+          IMG_FRONT="ghcr.io/germorini/ingsoft3-tp01-frontend:sha-${GITHUB_SHA}"
           curl --fail --silent --show-error --max-time 30 \
-            "${HOOK_API}&ref=${GITHUB_SHA}"
+            --get --data-urlencode "imgURL=${IMG_API}" "${HOOK_API}"
           curl --fail --silent --show-error --max-time 30 \
-            "${HOOK_FRONT}&ref=${GITHUB_SHA}"
+            --get --data-urlencode "imgURL=${IMG_FRONT}" "${HOOK_FRONT}"
 
       - name: Esperar y verificar PROD
         env:

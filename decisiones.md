@@ -884,3 +884,15 @@ tres pruebas HTTP contra PostgreSQL, tres flujos Chromium, pulls anónimos de am
 corridas reales. Para cada prueba revisé sus assertions y su límite: las de integración no ven la
 pantalla; las E2E sólo cubren los tres recorridos elegidos; ninguna demuestra identidad de imagen sin
 contrastar Events o incorporar el SHA al endpoint de vida.
+
+## TP8 — Infraestructura como Código
+
+Elegí Terraform con Neon y Render. Fijé `kislerdm/neon` 0.18.0 y `render-oss/render` 1.9.1. Preprod
+usa las imágenes de `v7.0.0`; la conexión de la API y la dirección usada por el front se derivan en
+Terraform. Los servicios se crean en Ohio, igual que QA y producción.
+
+El ejemplo de la guía usaba variables de .NET. Lo adapté a las variables de FitPro. Neon también
+pidió el `org_id`, así que lo declaré de forma explícita. El estado y los tfvars quedan fuera de Git.
+
+Usé Codex para revisar la consigna y escribir el HCL. Verifiqué `fmt`, `validate`, el plan sin
+cambios y el ciclo `destroy` → `apply`; también probé la API, la base y el front.

@@ -84,12 +84,6 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	health.New(pool).RegisterRoutes(mux)
 	identityController.RegisterRoutes(mux)
 	routinesController.RegisterRoutes(mux, identityController.Authenticate)
-	if cfg.SentryDSN != "" {
-		mux.Handle(
-			"GET /api/falla",
-			identityController.Authenticate(http.HandlerFunc(captureTestFailure)),
-		)
-	}
 
 	var handler http.Handler = mux
 	if cfg.SentryDSN != "" {
@@ -120,14 +114,6 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		return err
 	}
 	return nil
-}
-
-func captureTestFailure(w http.ResponseWriter, r *http.Request) {
-	err := errors.New("falla de prueba del TP9")
-	if hub := sentry.GetHubFromContext(r.Context()); hub != nil {
-		hub.CaptureException(err)
-	}
-	http.Error(w, "Error interno.", http.StatusInternalServerError)
 }
 
 type responseStatusWriter struct {

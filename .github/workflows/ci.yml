@@ -52,7 +52,7 @@ jobs:
           cat backend-coverage/summary.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publicar coverage del backend
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
           name: coverage-backend
@@ -138,7 +138,7 @@ jobs:
           " >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publicar coverage del frontend
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
           name: coverage-frontend
@@ -246,7 +246,7 @@ jobs:
         working-directory: ./frontend
 
       - name: Publicar reporte de integracion
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
           name: playwright-report-integracion
@@ -285,7 +285,7 @@ jobs:
         working-directory: ./frontend
 
       - name: Publicar reporte e2e
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
           name: playwright-report-e2e

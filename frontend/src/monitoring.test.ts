@@ -18,7 +18,7 @@ describe('initMonitoring', () => {
 
     expect(Sentry.browserTracingIntegration).toHaveBeenCalledOnce()
     expect(Sentry.init).toHaveBeenCalledWith({
-      dsn: 'https://b92ee638e21f852d20cf45df43d65cc8@o4512313935527936.ingest.us.sentry.io/4512313978126336',
+      dsn: 'https://d5e3e4e48575b548a6639e5ea28f167f@o4512313935527936.ingest.us.sentry.io/4512319084036096',
       environment: 'fitpro-germorini-front-prod.onrender.com',
       integrations: [{ name: 'BrowserTracing' }],
       tracesSampleRate: 1.0,

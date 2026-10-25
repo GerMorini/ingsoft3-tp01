@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -10,6 +11,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/getsentry/sentry-go"
+	sentryhttp "github.com/getsentry/sentry-go/http"
 	identitycontroller "github.com/gmorini/inge-soft-3/backend/internal/identity/controller"
 	identityrepository "github.com/gmorini/inge-soft-3/backend/internal/identity/repository"
 	identityservice "github.com/gmorini/inge-soft-3/backend/internal/identity/service"
@@ -42,6 +45,18 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	if cfg.SentryDSN != "" {
+		if err := sentry.Init(sentry.ClientOptions{
+			Dsn:              cfg.SentryDSN,
+			Environment:      cfg.SentryEnvironment,
+			EnableTracing:    true,
+			TracesSampleRate: 1.0,
+			SendDefaultPII:   false,
+		}); err != nil {
+			return fmt.Errorf("initialize Sentry: %w", err)
+		}
+		defer sentry.Flush(2 * time.Second)
+	}
 
 	pool, err := database.Open(ctx, cfg.DatabaseURL)
 	if err != nil {
@@ -69,10 +84,21 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	health.New(pool).RegisterRoutes(mux)
 	identityController.RegisterRoutes(mux)
 	routinesController.RegisterRoutes(mux, identityController.Authenticate)
+	if cfg.SentryDSN != "" {
+		mux.Handle(
+			"GET /api/falla",
+			identityController.Authenticate(http.HandlerFunc(captureTestFailure)),
+		)
+	}
+
+	var handler http.Handler = mux
+	if cfg.SentryDSN != "" {
+		handler = sentryhttp.New(sentryhttp.Options{Repanic: true}).Handle(handler)
+	}
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           logRequests(logger, mux),
+		Handler:           logRequests(logger, handler),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -94,6 +120,14 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		return err
 	}
 	return nil
+}
+
+func captureTestFailure(w http.ResponseWriter, r *http.Request) {
+	err := errors.New("falla de prueba del TP9")
+	if hub := sentry.GetHubFromContext(r.Context()); hub != nil {
+		hub.CaptureException(err)
+	}
+	http.Error(w, "Error interno.", http.StatusInternalServerError)
 }
 
 type responseStatusWriter struct {

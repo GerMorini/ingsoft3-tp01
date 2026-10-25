@@ -46,6 +46,8 @@ func TestLoad(t *testing.T) {
 			t.Setenv("JWT_SECRET", test.jwtSecret)
 			t.Setenv("HTTP_ADDR", test.httpAddr)
 			t.Setenv("TEST_DATABASE_URL", "postgres://localhost/app_test")
+			t.Setenv("SENTRY_DSN", "https://public@example.ingest.sentry.io/1")
+			t.Setenv("SENTRY_ENVIRONMENT", "production")
 
 			got, err := Load()
 			if test.wantErr != "" {
@@ -62,6 +64,12 @@ func TestLoad(t *testing.T) {
 			}
 			if got.TestDatabaseURL != "postgres://localhost/app_test" {
 				t.Errorf("TestDatabaseURL = %q", got.TestDatabaseURL)
+			}
+			if got.SentryDSN != "https://public@example.ingest.sentry.io/1" {
+				t.Errorf("SentryDSN = %q", got.SentryDSN)
+			}
+			if got.SentryEnvironment != "production" {
+				t.Errorf("SentryEnvironment = %q", got.SentryEnvironment)
 			}
 		})
 	}

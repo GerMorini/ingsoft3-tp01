@@ -896,3 +896,18 @@ pidió el `org_id`, así que lo declaré de forma explícita. El estado y los tf
 
 Usé Codex para revisar la consigna y escribir el HCL. Verifiqué `fmt`, `validate`, el plan sin
 cambios y el ciclo `destroy` → `apply`; también probé la API, la base y el front.
+
+## TP9 — DevSecOps y observabilidad
+
+El PR de Dependabot actualizó `source-map-js` de 1.2.1 a 1.2.2. Era un parche indirecto y sus checks
+quedaron verdes, por eso lo fusioné.
+
+UptimeRobot tardó 4 minutos en avisar la caída y 10 en detectar la recuperación. En Sentry, las
+operaciones más usadas fueron `GET /api/exercises` y `GET /api/sessions`, con 11 solicitudes cada
+una. La más lenta fue `GET /api/exercises`, con P95 de 581,10 ms. Esto originó el issue #46.
+
+Edge bloqueó al principio los envíos de Sentry. Permití el sitio y repetí la prueba. También excluí
+`/health` y `/api/ready` de la consulta porque son chequeos automáticos, no uso real.
+
+Usé Codex para revisar la guía, instrumentar Sentry y Dependabot, preparar las pruebas y resumir los
+resultados. La configuración de GitHub, Render, Sentry y UptimeRobot fue manual.

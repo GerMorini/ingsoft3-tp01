@@ -10,6 +10,7 @@
     "test:ci": "vitest run --coverage --coverage.reportsDirectory=${COVERAGE_DIR:-coverage}"
   },
   "dependencies": {
+    "@sentry/react": "11.9.0",
     "@tailwindcss/vite": "4.3.3",
     "daisyui": "5.7.16",
     "lucide-react": "^1.31.0",
